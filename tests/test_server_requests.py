@@ -1,4 +1,6 @@
 from LSP.plugin.core.protocol import ErrorCode
+from LSP.plugin.core.protocol import TextDocumentSyncKindFull
+from LSP.plugin.core.protocol import TextDocumentSyncKindNone
 from LSP.plugin.core.typing import Any, Dict, Generator, Optional
 from LSP.plugin.core.url import filename_to_uri
 from setup import TextDocumentTestCase
@@ -63,7 +65,11 @@ class ServerRequests(TextDocumentTestCase):
                     {"method": "workspace/didChangeWorkspaceFolders", "id": "asdf"},
                     {"method": "textDocument/didOpen", "id": "1"},
                     {"method": "textDocument/willSaveWaitUntil", "id": "2",
-                     "registerOptions": {"documentSelector": {}}}  # TODO: DocumentSelector someday?
+                     "registerOptions": {"documentSelector": []}},
+                    {"method": "textDocument/didChange", "id": "adsf",
+                     "registerOptions": {"syncKind": TextDocumentSyncKindFull, "documentSelector": [
+                       {"language": "txt", "pattern": "**/*.txt"}
+                     ]}}
                 ]
             },
             None)
@@ -72,9 +78,12 @@ class ServerRequests(TextDocumentTestCase):
         self.assertIn("bazProvider", self.session.capabilities)
         self.assertEqual(self.session.capabilities.get("bazProvider"), {"id": "world", "frobnicatable": True})
         self.assertEqual(self.session.capabilities.get("workspace.workspaceFolders.changeNotifications"), "asdf")
-        self.assertEqual(self.session.capabilities.get("textDocumentSync.openClose"), {"id": "1"})
-        self.assertEqual(self.session.capabilities.get("textDocumentSync.willSaveWaitUntil"),
-                         {"id": "2", "documentSelector": {}})
+        self.assertEqual(self.session.capabilities.get("textDocumentSync.didOpen"), {"id": "1"})
+        self.assertFalse(self.session.capabilities.get("textDocumentSync.didClose"))
+        self.assertEqual(self.session.capabilities.get("textDocumentSync.willSaveWaitUntil"), {"id": "2"})
+        self.assertEqual(self.session.capabilities.text_sync_kind(), TextDocumentSyncKindNone)
+        sb = next(self.session.session_buffers_async())
+        self.assertEqual(sb.capabilities.text_sync_kind(), TextDocumentSyncKindFull)
 
     def test_m_client_unregisterCapability(self) -> Generator:
         yield from self.verify(
@@ -84,6 +93,6 @@ class ServerRequests(TextDocumentTestCase):
         self.assertIn("barProvider", self.session.capabilities)
         yield from self.verify(
             "client/unregisterCapability",
-            {"unregisterations": [{"method": "foo/bar", "id": "asdf"}]},  # the ID doesn't matter for us (?)
+            {"unregisterations": [{"method": "foo/bar", "id": "hello"}]},
             None)
         self.assertNotIn("barProvider", self.session.capabilities)
